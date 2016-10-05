@@ -7,6 +7,7 @@ from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
 
 
 MODEL_SAVE = 'rf-clf.pkl'
@@ -30,15 +31,15 @@ def format():
 def train(data, save, test_size):
     dataset = load_files(data)
     X_train, X_test, y_train, y_test = train_test_split(dataset.data, dataset.target, test_size=test_size)
-    vectorizer = TfidfVectorizer(min_df=5,
-                                 max_df = 0.8,
-                                 sublinear_tf=True,
-                                 use_idf=True)
-    train_vectors = vectorizer.fit_transform(X_train)
-    test_vectors = vectorizer.transform(X_test)
-    clf = RandomForestClassifier()
-    clf.fit(train_vectors, y_train)
-    accuracy = accuracy_score(y_test, clf.predict(test_vectors))
+    pipeline = Pipeline([
+        ('tfidf', TfidfVectorizer(min_df=5,
+                                  max_df = 0.8,
+                                  sublinear_tf=True,
+                                  use_idf=True)),
+        ('clf', RandomForestClassifier())
+    ])
+    pipeline.fit(X_train, y_train)
+    accuracy = accuracy_score(y_test, pipeline.predict(X_test))
     click.echo('Accuracy: {}'.format(accuracy))  
     if save:
         joblib.dump(dataset.target_names, TARGET_SAVE) 
