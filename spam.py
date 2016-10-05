@@ -1,8 +1,9 @@
 import click
+import string
 
 
 from sklearn.datasets import load_files
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.externals import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score
@@ -51,16 +52,67 @@ def train(data, save, test_size):
 
 
 @cli.command()
-@click.argument('msg')
+@click.argument('document')
 @click.option('--model', default=MODEL_SAVE)
 @click.option('--vectorizer', default=VECT_SAVE)
 @click.option('--target_names', default=TARGET_SAVE)
-def query(msg, model, vectorizer, target_names):
+def query(document, model, vectorizer, target_names):
     clf = joblib.load(model)
     vect = joblib.load(vectorizer)
     targets = joblib.load(target_names)
-    msg_vector = vect.transform([msg])
-    click.echo(targets[clf.predict(msg_vector)[0]])
+    document_vector = vect.transform([document])
+    click.echo(targets[clf.predict(document_vector)[0]])
+
+
+@cli.command()
+@click.option('--data', default='dataset')
+@click.option('--test_size', default=0.1)
+def feature_selection(data, test_size):
+    dataset = load_files(data)
+    X_train, X_test, y_train, y_test = train_test_split(dataset.data, dataset.target, test_size=test_size)
+    vectorizer = CustomVectorizer()
+    train_vectors = vectorizer.fit(X_train)
+    model = ExtraTreesClassifier()
+    model.fit(train_vectors, y_train)
+    results = sorted(zip(vectorizer.feature_names_, model.feature_importances_), key=lambda tuple: tuple[1], reverse=True)
+    for tuple in results:
+        print('{}: {}'.format(tuple[0], tuple[1]))
+
+
+class CustomVectorizer(object):
+    """docstring for CustomVectorizer"""
+    def __init__(self):
+        super(CustomVectorizer, self).__init__()
+        self.feature_names_ = []
+
+    def fit(self, raw_documents, y=None):
+        X = []
+        for document in raw_documents:
+            features = {}
+            document = self.preprocess(document)
+            upper_chars = len([letter for letter in document if letter.isupper()])
+            lower_chars = len([letter for letter in document if letter.islower()])
+            features['words'] = len(document.split())
+            features['upper_char_ratio'] = upper_chars / (upper_chars + lower_chars)
+            features['lower_char_ratio'] = lower_chars / (upper_chars + lower_chars)
+            vector = []
+            feature_names = []
+            for key in sorted(features.keys()):
+                feature_names.append(key)
+                vector.append(features[key])
+            X.append(vector)
+        self.feature_names_ = feature_names
+        return X
+
+
+    def preprocess(self, document):
+        document = document.decode()
+        document = document.replace('\n', ' ')
+        translator = str.maketrans({key: None for key in string.punctuation})
+        document = document.translate(translator)
+        document = ''.join([i for i in document if not i.isdigit()])
+        return document
+        
 
 if __name__ == '__main__':
     cli()
